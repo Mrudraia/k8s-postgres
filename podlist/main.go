@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/k8s-postgres/db"
+	"github.com/Mrudraia/k8s-postgres/db"
 
 	_ "github.com/lib/pq"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,10 +19,24 @@ import (
 func main() {
 	var ns string
 	flag.StringVar(&ns, "namespace", "", "namespace")
-	db := db.Open()
+	db.Open()
+	sqlDB, _ := db.DB.DB()
+	defer sqlDB.Close()
 
-	rows, err := db.Query("SELECT * FROM test")
-	fmt.Println(rows)
+	pod_table, err := sqlDB.Query("SELECT * FROM pods")
+	if err != nil {
+		fmt.Println("the table with pods does not exist ---", err)
+	} else {
+		fmt.Println(pod_table)
+	}
+
+	service_table, err := sqlDB.Query("SELECT * FROM services")
+	if err != nil {
+		fmt.Println("the table with services does not exist ---", err)
+	} else {
+		fmt.Println(service_table)
+	}
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,13 +66,22 @@ func main() {
 	}
 
 	http.HandleFunc("/pods", func(w http.ResponseWriter, r *http.Request) {
+
 		for i, pod := range pods.Items {
+			id := i
+			name := pod.GetName()
+			sql_statement := `INSERT INTO pods (id, pod_name) values ($1 , $2)`
+			err = sqlDB.QueryRow(sql_statement, i, name).Scan(&id)
 			fmt.Fprintf(w, "[%d] %s\n", i, pod.GetName())
 		}
 	})
 
 	http.HandleFunc("/services", func(w http.ResponseWriter, r *http.Request) {
 		for i, ser := range services.Items {
+			id := i
+			name := ser.GetName()
+			sql_statement := `INSERT INTO services (id, service_name) values ($1 , $2)`
+			err = sqlDB.QueryRow(sql_statement, i, name).Scan(&id)
 			fmt.Fprintf(w, "[%d] %s\n", i, ser.GetName())
 		}
 	})
